@@ -116,6 +116,3 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-
-# Discord Bot トークンの保存用
-discord_token.txt
