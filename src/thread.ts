@@ -1,21 +1,18 @@
 import { SlashCommandBuilder } from "@discordjs/builders";
 import { Client, CommandInteraction } from "discord.js";
-import { command } from "./commands";
+import { addCommand } from "./commands";
 
-interface Cog {
-    client: Client
-}
-
-class ThreadCog implements Cog {
-    client: Client;
-
-    constructor(client: Client) {
-        this.client = client;
-    }
+const handler = async (interaction: CommandInteraction) => {
+    await interaction.reply("hello!");
 }
 
 const setup = (client: Client) => {
-    
+    addCommand(
+        client,
+        handler,
+        new SlashCommandBuilder()
+            .setName("hello")
+    )
 }
 
 
