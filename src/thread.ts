@@ -1,14 +1,13 @@
 import { SlashCommandBuilder } from "@discordjs/builders";
 import { Client, CommandInteraction } from "discord.js";
-import { addCommand } from "./commands";
+import { InterfaceWHLBot } from ".";
 
 const handler = async (interaction: CommandInteraction) => {
     await interaction.reply("hello!");
 }
 
-const setup = (client: Client) => {
-    addCommand(
-        client,
+const setup = (client: InterfaceWHLBot) => {
+    client.addCommand(
         handler,
         new SlashCommandBuilder()
             .setName("hello")
