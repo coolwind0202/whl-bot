@@ -1,19 +1,39 @@
 import { Client, ClientOptions, Intents, CommandInteraction } from "discord.js";
 import { SlashCommandBuilder } from "@discordjs/builders";
+import { Routes } from "discord-api-types/v9";
+import { REST } from "@discordjs/rest";
 import dotenv from "dotenv";
+
+import ThreadSetup from "./thread";
 
 dotenv.config();
 
+const token = process.env.DISCORD_TOKEN;
+const guildId = process.env.GUILD_ID;
+
 interface InterfaceWHLBot extends Client {
-	commands: []
+	commands: SlashCommandBuilder[]
 	addCommand (func: { (interaction: CommandInteraction): void }, builder: SlashCommandBuilder): void
 }
 
 class WHLBot extends Client implements InterfaceWHLBot {
-	commands: []
+	commands: SlashCommandBuilder[]
 	constructor(options: ClientOptions) {
 		super(options);
 		this.commands = [];
+
+		const rest = new REST({ version: "9" });
+		if (token) rest.setToken(token);
+		
+		this.on("ready", async () => {
+			const json = this.commands.map(command => command.toJSON());
+			const clientId = this.user?.id;
+
+			clientId && guildId && await rest.put(
+				Routes.applicationGuildCommands(clientId, guildId), 
+				{ body: json }
+			);
+		});
 	}
 
 	addCommand (func: { (interaction: CommandInteraction): void }, builder: SlashCommandBuilder) {
@@ -24,6 +44,7 @@ class WHLBot extends Client implements InterfaceWHLBot {
 				func(interaction);
 			}
 		});
+		this.commands.push(builder);
 	}
 }
 // Create a new client instance
@@ -33,7 +54,8 @@ const client = new WHLBot({ intents: [Intents.FLAGS.GUILDS] });
 client.once('ready', () => {
 	console.log('Ready!');
 });
-console.log(process.env.DISCORD_TOKEN);
+
+ThreadSetup(client);
 
 // Login to Discord with your client's token
 client.login(process.env.DISCORD_TOKEN);

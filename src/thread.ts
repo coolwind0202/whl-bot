@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from "@discordjs/builders";
-import { Client, CommandInteraction } from "discord.js";
+import { CommandInteraction } from "discord.js";
 import { InterfaceWHLBot } from ".";
 
 const handler = async (interaction: CommandInteraction) => {
@@ -11,9 +11,8 @@ const setup = (client: InterfaceWHLBot) => {
         handler,
         new SlashCommandBuilder()
             .setName("hello")
-    )
+            .setDescription("send hello")
+    );
 }
-
-
 
 export default setup;
