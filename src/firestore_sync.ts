@@ -12,21 +12,14 @@ const setup = (client: InterfaceWHLBot) => {
     const isProfileUpdated = (a: UserType, b: UserType) => {
         
         let flag = false;
-        console.log(flag);
         flag ||= a.username !== b.username;
-        console.log(flag);
-
         flag ||= a.discriminator !== b.discriminator;
-        console.log(flag);
         flag ||= a.displayAvatarURL() !== b.displayAvatarURL();
-        console.log(flag);
         return flag;
     }
     client.on("userUpdate", async (oldUser, newUser) => {
-        console.log("updated")
         if (isProfileUpdated(oldUser, newUser)) {
             const doc = db.doc(`members/${oldUser.id}`);
-            console.log(doc);
             await doc.set({
                 username: newUser.username,
                 discriminator: newUser.discriminator,
