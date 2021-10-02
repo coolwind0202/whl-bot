@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, SlashCommandSubcommandBuilder } from "@discordjs/builders";
 import { CommandInteraction } from "discord.js";
 import { InterfaceWHLBot } from ".";
-import { db } from "./firestore_config";
+import { getDb } from "./firestore_config";
 
 const handler = async (interaction: CommandInteraction) => {
     const subCommand = interaction.options.getSubcommand();

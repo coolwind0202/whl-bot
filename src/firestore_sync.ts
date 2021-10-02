@@ -1,12 +1,13 @@
 import { PartialUser, User, PermissionFlags, Permissions, GuildMember } from "discord.js";
 import { InterfaceWHLBot } from ".";
-import { db, checkCanUseFirestore } from "./firestore_config";
+import { getDb, checkCanUseFirestore } from "./firestore_config";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const setup = (client: InterfaceWHLBot) => {
-    if (!checkCanUseFirestore()) {
+    const db = getDb();
+    if (db === null) {
         console.error("Firestore の認証データが環境変数に含まれていないため、 Firestore への同期機能はセットアップできません。");
         return;
     }

@@ -31,13 +31,13 @@ class WHLBot extends Client implements InterfaceWHLBot {
 
 	updateGuildCommands() {
 		const rest = new REST({ version: "9" });
-		if (token) rest.setToken(token);
+		rest.setToken(token);
 		
 		this.on("ready", async () => {
 			const json = this.commands.map(command => command.toJSON());
 			const clientId = this.user?.id;
 
-			clientId && guildId && await rest.put(
+			clientId && await rest.put(
 				Routes.applicationGuildCommands(clientId, guildId), 
 				{ body: json }
 			);
