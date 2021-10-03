@@ -65,7 +65,7 @@ class RoomCreateState {
     _matchExchangeEmoji (match: MatchType) {
         const emojiMap: { [type in MatchType]: string } = {
             "レギュラーマッチ": "852457286462341131",
-            "ガチマッチ": "853480634298138664",
+            "ガチマッチ": "894076218847154197",
             "サーモンラン": "853480486819069952",
             "プライベートマッチ": "853476328329183242"
         }
