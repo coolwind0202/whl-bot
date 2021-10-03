@@ -8,5 +8,6 @@ declare namespace NodeJS {
         readonly FIREBASE_CLIENT_EMAIL?: string
         readonly FIREBASE_PRIVATE_KEY?: string
         readonly BOT_OPT_OUT_ROLE_ID?: string
+        readonly THREAD_PORTAL_CHANNEL_ID?: string
     }
 }
