@@ -1,7 +1,10 @@
 import { SlashCommandBuilder, SlashCommandSubcommandBuilder } from "@discordjs/builders";
-import { Client, CommandInteraction, MessageActionRow, TextChannel, MessageSelectMenu, MessageEmbed, User, MessageComponentInteraction, MessageButton } from "discord.js";
+import { Client, CommandInteraction, MessageActionRow, TextChannel, MessageSelectMenu, MessageEmbed, User, MessageComponentInteraction, MessageButton,
+    InteractionUpdateOptions, MessageComponent, Message, Emoji, InteractionReplyOptions, ThreadChannel, InteractionCollector } from "discord.js";
 import { InterfaceWHLBot } from ".";
 import { getDb } from "./firestore_config";
+import { checkSelectMenu, checkButton } from "./utils/component";
+import { EnvVarInvalidError } from "./utils/error";
 
 const handler = async (interaction: CommandInteraction) => {
     const subCommand = interaction.options.getSubcommand();
@@ -10,271 +13,357 @@ const handler = async (interaction: CommandInteraction) => {
 }
 
 const getThreadPortal = async (client: Client) => {
-    const channelId = process.env.THREAD_PORTAL_CHANNEL_ID;
+    const variableName = "THREAD_PORTAL_CHANNEL_ID"
+    const channelId = process.env[variableName];
     if (channelId === undefined) {
-        console.error("募集用スレッドを作成する親チャンネルのIDが設定されていません。");
-        return null;
+        throw new EnvVarInvalidError(variableName, "募集用スレッドの親チャンネルの ID が指定されていません。")
     }
     const parent = await client.channels.fetch(channelId);
     
     if (parent === null) {
-        console.error("募集用スレッドを作成する親チャンネルのIDが誤っています。");
-        return null;
+        throw new EnvVarInvalidError(variableName, "募集用スレッドの親チャンネルの ID が間違っています。")
     } else if (!(parent instanceof TextChannel)){
-        console.error("募集用スレッドを作成する親チャンネルがテキストチャンネルではありません。");
-        return null;
+        throw new EnvVarInvalidError(variableName, "募集用スレッドの親チャンネルがテキストチャンネルではありませんでした。")
     }
     return parent;
 }
 
-const matchTypes = ["レギュラーマッチ", "ガチマッチ", "プライベートマッチ", "サーモンラン"] as const
-const regularMatchRules = ["ナワバリバトル"] as const
-const gachiMatchRules = ["ガチエリア", "ガチヤグラ", "ガチホコ", "ガチアサリ"] as const
-const salmonRunRules = ["サーモンラン"] as const
+type CustomId = string;
+type EmojiId = string;
+type ActionRowChild = MessageButton | MessageSelectMenu;
+type ComponentHandler = { (interaction: MessageComponentInteraction): Promise<void> | void };
 
-type MatchType = typeof matchTypes[number];
-type RegularMatchRule = typeof regularMatchRules[number];
-type GachiMatchRule = typeof gachiMatchRules[number];
-type PrivateMatchRule = RegularMatchRule | GachiMatchRule;
-type SalmonRunRule = typeof salmonRunRules[number];
+const matchKinds = ["レギュラーマッチ", "リーグマッチ", "プライベートマッチ", "サーモンラン"] as const
+type MatchKind = typeof matchKinds[number];
 
-type AllRule = RegularMatchRule | GachiMatchRule | PrivateMatchRule | SalmonRunRule;
+const matchEmojis = new Map<MatchKind, EmojiId>([
+    ["レギュラーマッチ", "852457286462341131"],
+    ["リーグマッチ", "894076218847154197"],
+    ["サーモンラン", "853480486819069952"],
+    ["プライベートマッチ", "853476328329183242"]
+]);
 
-const isMatchType = (type: string): type is MatchType => matchTypes.includes(type as MatchType);
-const isRegularMatchRule = (rule: string): rule is RegularMatchRule => regularMatchRules.includes(rule as RegularMatchRule);
-const isGachiMatchRule = (rule: string): rule is GachiMatchRule => gachiMatchRules.includes(rule as GachiMatchRule);
-const isPrivateMatchRule = (rule: string): rule is PrivateMatchRule => isRegularMatchRule(rule) || isGachiMatchRule(rule);
-const isSalmonRunRule = (rule: string): rule is SalmonRunRule => salmonRunRules.includes(rule as SalmonRunRule);
+const ruleKinds = ["ナワバリバトル", "ガチエリア", "ガチホコ", "ガチヤグラ", "ガチアサリ", "サーモンラン"] as const;
+type RuleKind = typeof ruleKinds[number];
+const ruleEmojis = new Map<RuleKind, EmojiId>([
+    ["ナワバリバトル", "852457286462341131"],
+    ["ガチエリア", "853480634298138664"],
+    ["ガチホコ", "852525700174315530"],
+    ["ガチヤグラ", "852502711530553344"],
+    ["ガチアサリ", "852457284239622145"],
+    ["サーモンラン", "853480486819069952"]
+]);
 
-class RoomCreateState {
-    interaction: CommandInteraction;
-    author: User;
-    matchType?: MatchType;
-    gameRule?: RegularMatchRule | GachiMatchRule | PrivateMatchRule | SalmonRunRule;
-    startTime?: Date
+const ruleRelation = new Map<MatchKind, RuleKind[]>([
+    ["レギュラーマッチ", ["ナワバリバトル"]],
+    ["リーグマッチ", ["ガチエリア", "ガチホコ", "ガチヤグラ", "ガチアサリ"]],
+    ["プライベートマッチ", ["ナワバリバトル", "ガチエリア", "ガチホコ", "ガチヤグラ", "ガチアサリ"]],
+    ["サーモンラン", ["サーモンラン"]]
+]);
 
-    constructor(interaction: CommandInteraction, author: User) {
+class State {
+    matchKind?: MatchKind;
+    ruleKind?: RuleKind;
+    startTime?: Date;
+    participantsNumber?: number;
+    confirmed: boolean = false;
+
+    joinCount: number = 0;
+    thread?: ThreadChannel;
+}
+
+class Dialogue {
+    interaction: CommandInteraction
+    state: State
+    handlers: Map<CustomId, ComponentHandler>;
+    collector?: InteractionCollector<MessageComponentInteraction>
+
+    constructor(interaction: CommandInteraction) {
         this.interaction = interaction;
-        this.author = author;
+        this.state = new State();
+
+        this.handlers = new Map();
+
+        const filter = (i: MessageComponentInteraction) => i.channel?.id === interaction.channel?.id && i.user.id === interaction.user.id;
+
+        this.collector = interaction.channel?.createMessageComponentCollector({ filter });
+        this.collector?.on("collect", (userInteraction: MessageComponentInteraction) => {
+            const handler = this.handlers.get(userInteraction.customId);
+            if (handler) handler(userInteraction);
+        });
     }
 
-    _timePadding(n: number) {
-        return n.toString().padStart(2, "0")
+    async change(interaction: MessageComponentInteraction, options: InteractionUpdateOptions) {
+        await interaction.update(options);
     }
 
-    _matchExchangeEmoji (match: MatchType) {
-        const emojiMap: { [type in MatchType]: string } = {
-            "レギュラーマッチ": "852457286462341131",
-            "ガチマッチ": "894076218847154197",
-            "サーモンラン": "853480486819069952",
-            "プライベートマッチ": "853476328329183242"
+    setHandlerToComponent(component: ActionRowChild, handler: ComponentHandler): ActionRowChild {
+        if (component.customId === null) {
+            throw new TypeError("コンポーネントに customId が設定されていません。");
         }
-
-        return emojiMap[match]
+        this.handlers.set(component.customId, handler);
+        return component;
     }
 
-    _ruleExchangeEmoji(rule: AllRule) {
-        const emojiMap: { [rule in AllRule]: string } = {
-            "ナワバリバトル": "852457286462341131",
-            "ガチエリア": "853480634298138664",
-            "ガチホコ": "852525700174315530",
-            "ガチヤグラ": "852502711530553344",
-            "ガチアサリ": "852457284239622145",
-            "サーモンラン": "853480486819069952"
-        }
 
-        return emojiMap[rule]
+    get matchEmoji() {
+        const kind = this.state.matchKind;
+        if (kind === undefined) return "";
+
+        const matchEmojiId = matchEmojis.get(kind)
+        if (matchEmojiId === undefined) return "";
+
+        const emoji = this.interaction.guild?.emojis?.cache.get(matchEmojiId) ?? "";
+        return emoji;
+    }
+    
+    get ruleEmoji() {
+        const kind = this.state.ruleKind;
+        if (kind === undefined) return "";
+
+        const ruleEmojiId = ruleEmojis.get(kind)
+        if (ruleEmojiId === undefined) return "";
+
+        const emoji = this.interaction.guild?.emojis.cache.get(ruleEmojiId) ?? "";
+        return emoji;
+    }
+
+    get startTimeLabel() {
+        if (this.state.startTime) {
+            const startTime = this.state.startTime
+            const hour = startTime.getHours().toString().padStart(2, "0");
+            const minute = startTime.getMinutes().toString().padStart(2, "0");
+            return `${hour}:${minute}`
+        } else {
+            return "未設定";
+        }
+    }
+
+    get participantsNumberLabel() {
+        if (!this.state.participantsNumber) return "未設定"
+        else return `${this.state.participantsNumber} 人`
     }
 
     get embed() {
-        const hour = this.startTime?.getHours() ?? 0;
-        const minute = this.startTime?.getMinutes() ?? 0
-        const matchEmojiId = this.matchType ? this._matchExchangeEmoji(this.matchType) : null;
-        const ruleEmojiId = this.gameRule ? this._ruleExchangeEmoji(this.gameRule) : null;
-
-        const emojis = this.interaction.guild?.emojis;
-
-        const matchEmoji = matchEmojiId ? emojis?.cache.get(matchEmojiId) : null;
-        const ruleEmoji = ruleEmojiId ? emojis?.cache.get(ruleEmojiId) : null;
-
         return new MessageEmbed()
-        .setTitle(`${this.author.username}#${this.author.discriminator} さんの募集（プレビュー）`)
-        .addField("マッチの種類", `${matchEmoji ?? ""}${this.matchType ?? "未選択"}`, false)
-        .addField("試合のルール", `${ruleEmoji ?? ""}${this.gameRule ?? "未選択"}`, false)
-        .addField("開始時刻", 
-            `${this._timePadding(hour)} : ${this._timePadding(minute)}`, false)
-        .setColor("RANDOM");
+            .setDescription(`${this.interaction.user} さんの募集 ${this.state.confirmed ? "": "（プレビュー）"}`)
+            .addField("マッチの種類", `${this.matchEmoji} ${this.state.matchKind ?? "未設定"}`)
+            .addField("試合のルール", `${this.ruleEmoji} ${this.state.ruleKind ?? "未設定"}`)
+            .addField("募集人数", `${this.participantsNumberLabel}`)
+            .addField("開始時刻", `${this.startTimeLabel}`)
+            .setAuthor("White-Lucida", this.interaction.user.displayAvatarURL())
+            .setColor("RANDOM")
     }
 
-    get matchTypeMenu() {
-        const row = new MessageActionRow()
-        .addComponents(
+    get matchKindMessage(): InteractionUpdateOptions {
+        const options = matchKinds.map(kind => ({
+            label: kind,
+            emoji: matchEmojis.get(kind) ?? "",
+            value: kind
+        }));
+
+        const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
-                .setCustomId(`match_type ${this.author.id}`)
+                .setCustomId(`match_kind ${this.interaction.user.id}`)
                 .setPlaceholder("マッチの種類")
-                .addOptions(matchTypes.map(kind => ({
-                    label: kind,
-                    emoji: this._matchExchangeEmoji(kind),
-                    value: kind
-                }))),
-        );
-        return row;
-    }
+                .addOptions(options),
+            async (matchKindInteraction: MessageComponentInteraction) => {
+                if (!checkSelectMenu(matchKindInteraction)) return;
 
-    get rules(): (RegularMatchRule | GachiMatchRule | PrivateMatchRule | SalmonRunRule)[] | null {
-        switch (this.matchType) {
-            case "レギュラーマッチ":
-                return [...regularMatchRules];
-            case "ガチマッチ":
-                return [...gachiMatchRules];
-            case "プライベートマッチ":
-                return [...regularMatchRules, ...gachiMatchRules];
-            case "サーモンラン":
-                return ["サーモンラン"];
-            default:
-                return null;
+                const value = matchKindInteraction.values[0] as MatchKind;
+                if (matchKinds.includes(value))
+                    this.state.matchKind = value;
+                
+                await this.change(matchKindInteraction, this.gameRuleMessage)
+            }
+        );
+
+        const row = new MessageActionRow().addComponents(menu);
+        return {
+            content: "マッチの種類を選択してください。",
+            components: [ row ],
+            embeds: [ this.embed ]
         }
     }
 
-    get ruleMenu() {
-        const kinds = this.rules;
-        if (kinds === null) return null;
+    get gameRuleMessage(): InteractionUpdateOptions {
+        if (this.state.matchKind === undefined) throw new TypeError("マッチの種類が選択されていません。");
 
-        const row = new MessageActionRow()
-        .addComponents(
+        const rules = ruleRelation.get(this.state.matchKind);
+        if (rules === undefined) throw new TypeError("指定されたマッチの種類に対応するルールが見つかりませんでした。");
+        
+        const options = rules.map(rule => ({
+            label: rule,
+            emoji: ruleEmojis.get(rule) ?? "",
+            value: rule
+        }));
+
+        const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
-                .setCustomId(`game_rule ${this.author.id}`)
+                .setCustomId(`game_rule ${this.interaction.user.id}`)
                 .setPlaceholder("試合のルール")
-                .addOptions(kinds.map(kind => ({
-                    label: kind,
-                    emoji: this._ruleExchangeEmoji(kind),
-                    value: kind
-                }))),
+                .addOptions(options),
+            async (gameRuleInteraction: MessageComponentInteraction) => {
+                if (!checkSelectMenu(gameRuleInteraction)) return;
+
+                const value = gameRuleInteraction.values[0] as RuleKind;
+                if (rules.includes(value))
+                    this.state.ruleKind = value;
+                await this.change(gameRuleInteraction, this.participantsNumberMessage);
+            }
         );
-        return row;
+
+        const row = new MessageActionRow().addComponents(menu);
+
+        return {
+            content: "試合のルールを選択してください。",
+            components: [ row ],
+            embeds: [ this.embed ]
+        }
     }
 
-    get startTimeMenu() {
+    get participantsNumberMessage(): InteractionUpdateOptions {
+        const options: { label: string, value: string }[] = [];
+        options.push({ label: "設定しない", value: "none" });
+        for (let x = 1; x < 8; x++) options.push({ label: `${x} 人`, value: x.toString() });
+
+        const menu = this.setHandlerToComponent(
+            new MessageSelectMenu()
+                .setCustomId(`participants_number ${this.interaction.user.id}`)
+                .setPlaceholder("参加人数（希望）")
+                .addOptions(options),
+            async (participantsNumberInteraction: MessageComponentInteraction) => {
+                if (!checkSelectMenu(participantsNumberInteraction)) return;
+                const value = participantsNumberInteraction.values[0];
+                this.state.participantsNumber = value !== "none" ? Number(value) : undefined;
+                await this.change(participantsNumberInteraction, this.startTimeMessage)
+            }
+        );
+
+        const row = new MessageActionRow().addComponents(menu);
+
+        return {
+            content: "希望する参加人数を選択してください。",
+            components: [ row ],
+            embeds: [ this.embed ]
+        }
+    }
+
+    get startTimeMessage(): InteractionUpdateOptions {
         const base = new Date()
         base.setSeconds(0);
         base.setMinutes(Math.floor(base.getMinutes() / 15) * 15);
 
-        const options: string[] = [];
-
+        const optionsMap = new Map<string, Date>();
 
         for (let i = 0; i < 10; i++) {
             base.setMinutes(base.getMinutes() + 15);
-            options.push(`${this._timePadding(base.getHours())} : ${this._timePadding(base.getMinutes())}`);
+            const label = `${base.getHours().toString().padStart(2, "0")}: ${base.getMinutes().toString().padStart(2, "0")}`
+            optionsMap.set(label, new Date(base));
         }
-        const row = new MessageActionRow()
-        .addComponents(
+
+        const options = [...optionsMap.keys()].map(label => ({ label, value: label }));
+
+        const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
-                .setCustomId(`start_time ${this.author.id}`)
+                .setCustomId(`start_time ${this.interaction.user.id}`)
                 .setPlaceholder("開始時刻")
-                .addOptions(options.map(kind => ({
-                    label: kind,
-                    value: kind
-                }))),
+                .addOptions(options),
+            async (startTimeInteraction: MessageComponentInteraction) => {
+                if (!checkSelectMenu(startTimeInteraction)) return;
+                const value = startTimeInteraction.values[0]
+                if (!optionsMap.has(value)) throw new TypeError("指定された開始時刻が不正でした。");
+                this.state.startTime = optionsMap.get(value);
+
+                await this.change(startTimeInteraction, this.confirmMessage)
+            }
         );
 
-        return row;
+        const row = new MessageActionRow().addComponents(menu);
+
+        return {
+            content: "開始時刻を選択してください。",
+            components: [ row ],
+            embeds: [ this.embed ]
+        }
     }
 
-    get confirmButtons() {
-        const row = new MessageActionRow()
-		.addComponents(
-		    [
-                new MessageButton()
-                    .setCustomId(`confirm_yes ${this.author.id}`)
-                    .setStyle("PRIMARY")
-                    .setLabel("はい"),
-                new MessageButton()
-                    .setCustomId(`confirm_no ${this.author.id}`)
-                    .setStyle("DANGER")
-                    .setLabel("いいえ（やり直す）")
-            ]
-		);
-        return row;
+    get confirmMessage(): InteractionUpdateOptions {
+        const yesButton = this.setHandlerToComponent(
+            new MessageButton()
+                .setCustomId(`confirm_yes ${this.interaction.user.id}`)
+                .setLabel("はい")
+                .setStyle("PRIMARY"),
+            async (yesInteraction: MessageComponentInteraction) => {
+                if (!checkButton(yesInteraction)) return;
+                this.state.confirmed = true;
+                this.state.thread = await createThread(this.interaction);
+                await yesInteraction.update({
+                    content: `スレッドを作成しました。${this.state.thread} \n募集についての話し合いや試合中のチャットはここでどうぞ！`,
+                    components: [],
+                    embeds: [ this.embed ]
+                })
+                // await this.change(yesInteraction, this.joinUsMessage)
+            }
+        );
+        const noButton = this.setHandlerToComponent(
+            new MessageButton()
+                .setCustomId(`confirm_no ${this.interaction.user.id}`)
+                .setLabel("いいえ（やり直す）")
+                .setStyle("DANGER"),
+            async (yesInteraction: MessageComponentInteraction) => {
+                if (!checkButton(yesInteraction)) return;
+                this.state = new State();
+                await this.change(yesInteraction, this.matchKindMessage)
+            }
+        );
+
+        const row = new MessageActionRow().addComponents([ yesButton, noButton ]);
+
+        return {
+            content: "この内容で募集を開始してよろしいですか？",
+            components: [ row ],
+            embeds: [ this.embed ]
+        }
     }
+
+    /*
+    get joinUsMessage(): InteractionUpdateOptions {
+        const participants = this.state.participantsNumber;
+        const label = `${this.state.joinCount} 人参加` + participants ? ` / ${participants} 人募集` : ""
+        const button = this.setHandlerToComponent(
+            new MessageButton()
+                .setCustomId(`join_us ${this.interaction.user.id}`)
+                .setLabel(`参加する！ （${label}）`)
+                .setStyle("PRIMARY"),
+            async (yesInteraction: MessageComponentInteraction) => {
+                if (!checkButton(yesInteraction)) return;
+                const alreadyJoined = this.state.thread?.members.cache?.has(yesInteraction.user.id);
+
+                if (alreadyJoined !== undefined) {
+                    if (!alreadyJoined) {
+                        this.state.joinCount++;
+                        await this.state.thread?.members.add(yesInteraction.user)
+                    } else {
+
+                    }
+                }
+            }
+        );
+
+        const row = new MessageActionRow().addComponents([ button ]);
+        return {
+            content: `スレッドを作成しました。${this.state.thread} \n募集についての話し合いや試合中のチャットはここでどうぞ！`,
+            components: [ row ],
+            embeds: [ this.embed ]
+        }
+    }*/
 }
 
 const roomCreateHandler = async (interaction: CommandInteraction) => {
-    const state = new RoomCreateState(interaction, interaction.user);
-    
-    await interaction.reply({ 
-        content: "募集を作成します。マッチを選択してください。", 
-        components: [ state.matchTypeMenu ],
-        embeds: [ state.embed ] 
-    });
-
-    const filter = (i: MessageComponentInteraction) => i.channel?.id === interaction.channel?.id && i.user.id === interaction.user.id;
-
-    const collector = interaction.channel?.createMessageComponentCollector({ filter });
-    collector?.on("collect", (userInteraction: MessageComponentInteraction) => roomCreateDialogue(state, interaction, userInteraction));
-}
-
-const roomCreateDialogue = async (state: RoomCreateState, firstInteraction: CommandInteraction, userInteraction: MessageComponentInteraction) => {
-    if (userInteraction.isButton()) {
-        switch (userInteraction.customId) {
-            case `confirm_yes ${firstInteraction.user.id}`:
-                const thread = await createThread(firstInteraction);
-                if (thread === undefined) {
-                    await userInteraction.update({
-                        content: "スレッドの作成に失敗しました。", components: [], embeds: []
-                    });
-                } else {
-                    await thread.send({ embeds: [state.embed] });
-                    await userInteraction.update({
-                        content: `スレッドを作成しました。 ${thread.toString()}`, components: [], embeds: []
-                    })
-                }
-                return;
-            case `confirm_no ${firstInteraction.user.id}`:
-                await userInteraction.update({ 
-                    content: "マッチを選択してください。", 
-                    components: [ state.matchTypeMenu ],
-                    embeds: [ state.embed ] 
-                });
-                return;
-        }
-    }
-
-    if (!userInteraction.isSelectMenu()) return;
-    const value = userInteraction.values[0];
-    switch (userInteraction.customId) {
-        case `match_type ${firstInteraction.user.id}`:
-            if (isMatchType(value)) state.matchType = value;
-            await userInteraction.update({ 
-                content: "試合のルールを選択してください。", 
-                embeds: [state.embed], 
-                components: state.ruleMenu !== null ? [state.ruleMenu] : []
-            });
-            return;
-        case `game_rule ${firstInteraction.user.id}`:
-            if (isRegularMatchRule(value) && state.matchType === "レギュラーマッチ") state.gameRule = value;
-            else if (isGachiMatchRule(value) && state.matchType === "ガチマッチ") state.gameRule = value;
-            else if (isSalmonRunRule(value) && state.matchType === "サーモンラン") state.gameRule = value;
-            else if (isPrivateMatchRule(value) && state.matchType === "プライベートマッチ") state.gameRule = value;
-            await userInteraction.update({
-                content: "開始時刻を選択してください。",
-                embeds: [state.embed],
-                components: [state.startTimeMenu]
-            });
-            return;
-        case `start_time ${firstInteraction.user.id}`:
-            const [hour, minute] = value.split(":").map(Number);
-            const date = new Date();
-            date.setHours(hour);
-            date.setMinutes(minute);
-            date.setSeconds(0);
-            state.startTime = date;
-            await userInteraction.update({
-                content: "以下の条件でスレッドを作成します。よろしいですか？",
-                embeds: [state.embed],
-                components: [state.confirmButtons]
-            })
-            return;
-    }
+    const helper = new Dialogue(interaction);
+    console.log(interaction.id);
+    await interaction.reply(helper.matchKindMessage as InteractionReplyOptions);
 }
 
 const createThread = async (interaction: CommandInteraction) => {
