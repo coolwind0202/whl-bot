@@ -303,6 +303,7 @@ class Dialogue {
                     components: [],
                     embeds: [ this.embed ]
                 })
+                this.collector?.removeAllListeners();
                 // await this.change(yesInteraction, this.joinUsMessage)
             }
         );
@@ -362,7 +363,6 @@ class Dialogue {
 
 const roomCreateHandler = async (interaction: CommandInteraction) => {
     const helper = new Dialogue(interaction);
-    console.log(interaction.id);
     await interaction.reply(helper.matchKindMessage as InteractionReplyOptions);
 }
 
