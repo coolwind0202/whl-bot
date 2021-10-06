@@ -4,7 +4,7 @@ import { Routes } from "discord-api-types/v9";
 import { REST } from "@discordjs/rest";
 import dotenv from "dotenv";
 
-import ThreadSetup from "./thread";
+import ThreadSetup from "./thread/thread";
 import PingSetup from "./ping";
 import SyncSetup from "./firestore_sync";
 
