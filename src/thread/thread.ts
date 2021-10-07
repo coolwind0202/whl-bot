@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, SlashCommandSubcommandBuilder } from "@discordjs/builders";
+import { memberNicknameMention, SlashCommandBuilder, SlashCommandSubcommandBuilder } from "@discordjs/builders";
 import { Client, CommandInteraction, MessageActionRow, TextChannel, MessageSelectMenu, MessageEmbed, User, MessageComponentInteraction, MessageButton,
     InteractionUpdateOptions, MessageComponent, Message, Emoji, InteractionReplyOptions, ThreadChannel, InteractionCollector } from "discord.js";
 import { InterfaceWHLBot } from "..";
@@ -68,7 +68,7 @@ class State {
     participantsNumber?: number;
     confirmed: boolean = false;
 
-    joinCount: number = 0;
+    joinCount: number = 1;
     thread?: ThreadChannel;
 }
 
@@ -84,12 +84,19 @@ class Dialogue {
 
         this.handlers = new Map();
 
-        const filter = (i: MessageComponentInteraction) => i.channel?.id === interaction.channel?.id && i.user.id === interaction.user.id;
+        const filter = (i: MessageComponentInteraction) => i.channel?.id === interaction.channel?.id && i.customId.endsWith(this.interaction.id);
 
         this.collector = interaction.channel?.createMessageComponentCollector({ filter });
-        this.collector?.on("collect", (userInteraction: MessageComponentInteraction) => {
-            const handler = this.handlers.get(userInteraction.customId);
-            if (handler) handler(userInteraction);
+        this.collector?.on("collect", async (userInteraction: MessageComponentInteraction) => {
+            if (this.interaction.user === userInteraction.user || userInteraction.customId.startsWith("join_us")) {
+                const handler = this.handlers.get(userInteraction.customId);
+                if (handler) handler(userInteraction);
+            } else {
+                await userInteraction.reply({
+                    content: "コマンドを実行する権限がありません。",
+                    ephemeral: true
+                });
+            }
         });
     }
 
@@ -104,7 +111,6 @@ class Dialogue {
         this.handlers.set(component.customId, handler);
         return component;
     }
-
 
     get matchEmoji() {
         const kind = this.state.matchKind;
@@ -164,7 +170,7 @@ class Dialogue {
 
         const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
-                .setCustomId(`match_kind ${this.interaction.user.id}`)
+                .setCustomId(`match_kind ${this.interaction.id}`)
                 .setPlaceholder("マッチの種類")
                 .addOptions(options),
             async (matchKindInteraction: MessageComponentInteraction) => {
@@ -200,7 +206,7 @@ class Dialogue {
 
         const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
-                .setCustomId(`game_rule ${this.interaction.user.id}`)
+                .setCustomId(`game_rule ${this.interaction.id}`)
                 .setPlaceholder("試合のルール")
                 .addOptions(options),
             async (gameRuleInteraction: MessageComponentInteraction) => {
@@ -225,11 +231,11 @@ class Dialogue {
     get participantsNumberMessage(): InteractionUpdateOptions {
         const options: { label: string, value: string }[] = [];
         options.push({ label: "設定しない", value: "none" });
-        for (let x = 1; x < 8; x++) options.push({ label: `${x} 人`, value: x.toString() });
+        for (let x = 2; x < 8; x++) options.push({ label: `${x} 人`, value: x.toString() });
 
         const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
-                .setCustomId(`participants_number ${this.interaction.user.id}`)
+                .setCustomId(`participants_number ${this.interaction.id}`)
                 .setPlaceholder("参加人数（希望）")
                 .addOptions(options),
             async (participantsNumberInteraction: MessageComponentInteraction) => {
@@ -266,7 +272,7 @@ class Dialogue {
 
         const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
-                .setCustomId(`start_time ${this.interaction.user.id}`)
+                .setCustomId(`start_time ${this.interaction.id}`)
                 .setPlaceholder("開始時刻")
                 .addOptions(options),
             async (startTimeInteraction: MessageComponentInteraction) => {
@@ -291,25 +297,21 @@ class Dialogue {
     get confirmMessage(): InteractionUpdateOptions {
         const yesButton = this.setHandlerToComponent(
             new MessageButton()
-                .setCustomId(`confirm_yes ${this.interaction.user.id}`)
+                .setCustomId(`confirm_yes ${this.interaction.id}`)
                 .setLabel("はい")
                 .setStyle("PRIMARY"),
             async (yesInteraction: MessageComponentInteraction) => {
                 if (!checkButton(yesInteraction)) return;
                 this.state.confirmed = true;
                 this.state.thread = await createThread(this.interaction);
-                await yesInteraction.update({
-                    content: `スレッドを作成しました。${this.state.thread} \n募集についての話し合いや試合中のチャットはここでどうぞ！`,
-                    components: [],
-                    embeds: [ this.embed ]
-                })
-                this.collector?.removeAllListeners();
-                // await this.change(yesInteraction, this.joinUsMessage)
+                // await yesInteraction.update()
+                // this.collector?.removeAllListeners();
+                await this.change(yesInteraction, this.joinUsMessage)
             }
         );
         const noButton = this.setHandlerToComponent(
             new MessageButton()
-                .setCustomId(`confirm_no ${this.interaction.user.id}`)
+                .setCustomId(`confirm_no ${this.interaction.id}`)
                 .setLabel("いいえ（やり直す）")
                 .setStyle("DANGER"),
             async (yesInteraction: MessageComponentInteraction) => {
@@ -328,18 +330,20 @@ class Dialogue {
         }
     }
 
-    /*
     get joinUsMessage(): InteractionUpdateOptions {
         const participants = this.state.participantsNumber;
-        const label = `${this.state.joinCount} 人参加` + participants ? ` / ${participants} 人募集` : ""
+        const label = `${this.state.joinCount} 人参加` + (participants !== undefined ? ` / ${participants} 人募集` : "")
+        const full = participants && participants <= this.state.joinCount;
+
         const button = this.setHandlerToComponent(
             new MessageButton()
-                .setCustomId(`join_us ${this.interaction.user.id}`)
+                .setCustomId(`join_us ${this.interaction.id}`)
                 .setLabel(`参加する！ （${label}）`)
-                .setStyle("PRIMARY"),
+                .setStyle(full ? "SUCCESS" : "PRIMARY"),
             async (yesInteraction: MessageComponentInteraction) => {
                 if (!checkButton(yesInteraction)) return;
-                const alreadyJoined = this.state.thread?.members.cache?.has(yesInteraction.user.id);
+                const members = await this.state.thread?.members.fetch();
+                const alreadyJoined = members?.has(yesInteraction.user.id);
 
                 if (alreadyJoined !== undefined) {
                     if (!alreadyJoined) {
@@ -348,7 +352,11 @@ class Dialogue {
                     } else {
 
                     }
+                } else {
+                    this.state.joinCount++;
+                    await this.state.thread?.members.add(yesInteraction.user)
                 }
+                await this.change(yesInteraction, this.joinUsMessage)
             }
         );
 
@@ -358,7 +366,7 @@ class Dialogue {
             components: [ row ],
             embeds: [ this.embed ]
         }
-    }*/
+    }
 }
 
 const roomCreateHandler = async (interaction: CommandInteraction) => {
