@@ -350,7 +350,8 @@ class Dialogue {
                         this.state.joinCount++;
                         await this.state.thread?.members.add(yesInteraction.user)
                     } else {
-
+                        // TODO: 参加者リストは Firestore 上で管理されるべきである.
+                        // スレッドのメンバーはこの用途には不適切。
                     }
                 } else {
                     this.state.joinCount++;
