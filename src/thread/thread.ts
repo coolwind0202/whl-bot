@@ -2,7 +2,7 @@ import { memberNicknameMention, SlashCommandBuilder, SlashCommandSubcommandBuild
 import { Client, CommandInteraction, MessageActionRow, TextChannel, MessageSelectMenu, MessageEmbed, User, MessageComponentInteraction, MessageButton,
     InteractionUpdateOptions, MessageComponent, Message, Emoji, InteractionReplyOptions, ThreadChannel, InteractionCollector } from "discord.js";
 import { InterfaceWHLBot } from "..";
-import { getDb } from "../firestore_config";
+import { getDb } from "../firestore/firestore_config";
 import { checkSelectMenu, checkButton } from "../utils/component";
 import { EnvVarInvalidError } from "../utils/error";
 

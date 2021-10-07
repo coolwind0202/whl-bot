@@ -1,5 +1,5 @@
 import { PartialUser, User, PermissionFlags, Permissions, GuildMember } from "discord.js";
-import { InterfaceWHLBot } from ".";
+import { InterfaceWHLBot } from "..";
 import { getDb, checkCanUseFirestore } from "./firestore_config";
 import dotenv from "dotenv";
 

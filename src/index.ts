@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 
 import ThreadSetup from "./thread/thread";
 import PingSetup from "./ping";
-import SyncSetup from "./firestore_sync";
+import SyncSetup from "./firestore/firestore_sync";
 
 dotenv.config();
 
