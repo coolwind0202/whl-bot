@@ -50,7 +50,8 @@ const setup = (client: InterfaceWHLBot) => {
             const ref = db.doc(`members/${member.id}`);
             batch.set(ref, {
                 ...createDbMemberField(member),
-                friend_codes: "",
+                friend_code: "",
+                introduction: "",
             }, { mergeFields: ["username", "discriminator", "avatar_url", "admin"] });
         });
 
@@ -66,7 +67,11 @@ const setup = (client: InterfaceWHLBot) => {
 
     client.on("guildMemberAdd", async (member) => {
         const doc = db.doc(`members/${member.id}`);
-        await doc.set(createDbMemberField(member), { merge: true });
+        await doc.set({ 
+            ...createDbMemberField(member), 
+            friend_codes: "",
+            introduction: ""
+        }, { merge: true });
     });
 
     client.on("guildMemberRemove", async (member) => {
