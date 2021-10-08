@@ -33,14 +33,15 @@ type EmojiId = string;
 type ActionRowChild = MessageButton | MessageSelectMenu;
 type ComponentHandler = { (interaction: MessageComponentInteraction): Promise<void> | void };
 
-const matchKinds = ["レギュラーマッチ", "リーグマッチ", "プライベートマッチ", "サーモンラン"] as const
+const matchKinds = ["レギュラーマッチ", "リーグマッチ", "プライベートマッチ", "サーモンラン", "フェスマッチ"] as const
 type MatchKind = typeof matchKinds[number];
 
 const matchEmojis = new Map<MatchKind, EmojiId>([
     ["レギュラーマッチ", "852457286462341131"],
-    ["リーグマッチ", "894076218847154197"],
+    ["リーグマッチ", "895955025942151208"],
     ["サーモンラン", "853480486819069952"],
-    ["プライベートマッチ", "853476328329183242"]
+    ["プライベートマッチ", "853476328329183242"],
+    ["フェスマッチ", "895958090799800330"]
 ]);
 
 const ruleKinds = ["ナワバリバトル", "ガチエリア", "ガチホコ", "ガチヤグラ", "ガチアサリ", "サーモンラン"] as const;
@@ -58,12 +59,13 @@ const ruleRelation = new Map<MatchKind, RuleKind[]>([
     ["レギュラーマッチ", ["ナワバリバトル"]],
     ["リーグマッチ", ["ガチエリア", "ガチホコ", "ガチヤグラ", "ガチアサリ"]],
     ["プライベートマッチ", ["ナワバリバトル", "ガチエリア", "ガチホコ", "ガチヤグラ", "ガチアサリ"]],
-    ["サーモンラン", ["サーモンラン"]]
+    ["サーモンラン", ["サーモンラン"]],
+    ["フェスマッチ", ["ナワバリバトル"]]
 ]);
 
 class State {
     matchKind?: MatchKind;
-    ruleKind?: RuleKind;
+    ruleKinds: RuleKind[] = [];
     startTime?: Date;
     participantsNumber?: number;
     confirmed: boolean = false;
@@ -112,8 +114,7 @@ class Dialogue {
         return component;
     }
 
-    get matchEmoji() {
-        const kind = this.state.matchKind;
+    matchEmoji(kind: MatchKind | undefined) {
         if (kind === undefined) return "";
 
         const matchEmojiId = matchEmojis.get(kind)
@@ -123,8 +124,7 @@ class Dialogue {
         return emoji;
     }
     
-    get ruleEmoji() {
-        const kind = this.state.ruleKind;
+    ruleEmoji(kind: RuleKind | undefined) {
         if (kind === undefined) return "";
 
         const ruleEmojiId = ruleEmojis.get(kind)
@@ -132,6 +132,14 @@ class Dialogue {
 
         const emoji = this.interaction.guild?.emojis.cache.get(ruleEmojiId) ?? "";
         return emoji;
+    }
+
+    get rules() {
+        if (!this.state.ruleKinds.length) {
+            return "未設定"
+        }
+        const kinds = this.state.ruleKinds;
+        return kinds.map(kind => `${this.ruleEmoji(kind)} ${kind}`).join("\n")
     }
 
     get startTimeLabel() {
@@ -153,10 +161,10 @@ class Dialogue {
     get embed() {
         return new MessageEmbed()
             .setDescription(`${this.interaction.user} さんの募集 ${this.state.confirmed ? "": "（プレビュー）"}`)
-            .addField("マッチの種類", `${this.matchEmoji} ${this.state.matchKind ?? "未設定"}`)
-            .addField("試合のルール", `${this.ruleEmoji} ${this.state.ruleKind ?? "未設定"}`)
-            .addField("募集人数", `${this.participantsNumberLabel}`)
-            .addField("開始時刻", `${this.startTimeLabel}`)
+            .addField("マッチの種類", `${this.matchEmoji(this.state.matchKind)} ${this.state.matchKind ?? "未設定"}`)
+            .addField("試合のルール", this.rules)
+            .addField("募集人数", this.participantsNumberLabel)
+            .addField("開始時刻", this.startTimeLabel)
             .setAuthor("White-Lucida", this.interaction.user.displayAvatarURL())
             .setColor("RANDOM")
     }
@@ -204,17 +212,23 @@ class Dialogue {
             value: rule
         }));
 
+        const isPrivateMatch = this.state.matchKind === "プライベートマッチ";
+
         const menu = this.setHandlerToComponent(
             new MessageSelectMenu()
                 .setCustomId(`game_rule ${this.interaction.id}`)
-                .setPlaceholder("試合のルール")
-                .addOptions(options),
+                .setPlaceholder("試合のルール" + (isPrivateMatch ? "（複数選択可）" : ""))
+                .addOptions(options)
+                .setMaxValues(isPrivateMatch ? rules.length : 1),
             async (gameRuleInteraction: MessageComponentInteraction) => {
                 if (!checkSelectMenu(gameRuleInteraction)) return;
+                const values = gameRuleInteraction.values as RuleKind[];
 
-                const value = gameRuleInteraction.values[0] as RuleKind;
-                if (rules.includes(value))
-                    this.state.ruleKind = value;
+                for (const value of values) {
+                    // const value = gameRuleInteraction.values[0] as RuleKind;
+                    if (rules.includes(value))
+                        this.state.ruleKinds?.push(value)
+                }
                 await this.change(gameRuleInteraction, this.participantsNumberMessage);
             }
         );
