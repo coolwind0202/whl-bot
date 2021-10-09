@@ -9,5 +9,7 @@ declare namespace NodeJS {
         readonly FIREBASE_PRIVATE_KEY?: string
         readonly BOT_OPT_OUT_ROLE_ID?: string
         readonly THREAD_PORTAL_CHANNEL_ID?: string
+        readonly INTRODUCTION_CHANNEL_ID?: string
+        readonly FRIEND_CODE_CHANNEL_ID?: string
     }
 }

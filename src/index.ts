@@ -8,7 +8,7 @@ import ThreadSetup from "./thread/thread";
 import PingSetup from "./ping";
 import SyncSetup from "./firestore/firestore_sync";
 import ProfileFetchSetup from "./firestore/profile_fetch";
-
+import IntroductionSetup from "./firestore/introduction";
 import ProfileCommandJson from "./firestore/profile_command_json";
 
 dotenv.config();
@@ -62,7 +62,7 @@ class WHLBot extends Client implements InterfaceWHLBot {
 	}
 }
 // Create a new client instance
-const client = new WHLBot({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MEMBERS, Intents.FLAGS.GUILD_PRESENCES] });
+const client = new WHLBot({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MEMBERS, Intents.FLAGS.GUILD_PRESENCES, Intents.FLAGS.GUILD_MESSAGES] });
 
 // When the client is ready, run this code (only once)
 client.once('ready', () => {
@@ -72,6 +72,7 @@ client.once('ready', () => {
 ThreadSetup(client);
 PingSetup(client);
 SyncSetup(client);
+IntroductionSetup(client);
 ProfileFetchSetup(client);
 
 // Login to Discord with your client's token
