@@ -349,7 +349,7 @@ class Dialogue {
         const label = `${this.state.joinCount} 人参加` + (participants !== undefined ? ` / ${participants} 人募集` : "")
         const full = participants && participants <= this.state.joinCount;
 
-        const button = this.setHandlerToComponent(
+        const joinUs = this.setHandlerToComponent(
             new MessageButton()
                 .setCustomId(`join_us ${this.interaction.id}`)
                 .setLabel(`参加する！ （${label}）`)
@@ -375,7 +375,23 @@ class Dialogue {
             }
         );
 
-        const row = new MessageActionRow().addComponents([ button ]);
+        const deadline = this.setHandlerToComponent(
+            new MessageButton()
+                .setCustomId(`deadline ${this.interaction.id}`)
+                .setLabel("締め切る")
+                .setStyle("DANGER"),
+            async (deadlineInteraction: MessageComponentInteraction) => {
+                if (!checkButton(deadlineInteraction)) return;
+                await deadlineInteraction.update({
+                    content: "募集を締め切りました。",
+                    embeds: [ this.embed ],
+                    components: []
+                });
+                this.collector?.removeAllListeners();
+            }
+        );
+
+        const row = new MessageActionRow().addComponents([ joinUs, deadline ]);
         return {
             content: `スレッドを作成しました。${this.state.thread} \n募集についての話し合いや試合中のチャットはここでどうぞ！`,
             components: [ row ],
