@@ -26,7 +26,7 @@ const setup = (client: InterfaceWHLBot) => {
         username: user.username,
         discriminator: user.discriminator,
         avatar_url: user.displayAvatarURL()
-    })
+    });
 
     const createDbMemberField = (member: GuildMember) => ({
         ...createDbUserField(member.user),

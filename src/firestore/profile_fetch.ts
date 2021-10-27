@@ -25,12 +25,12 @@ const embed = async (data: FirebaseFirestore.DocumentData | undefined, tags: Fir
     const userData = new MessageEmbed()
         .setTitle(`${data.username} のデータ`)
         .setDescription(data.introduction)
-        .addField("フレンドコード", data.friend_code || "未設定") /* 複数形なのはおかしい */
+        .addField("フレンドコード", data.friend_code || "未設定")
         .setFooter("自己紹介とフレンドコードは Discord チャンネルから変更できます。")
         .setThumbnail(data.avatar_url)
         .setColor("RANDOM")
 
-    return userData.addFields(await tagFields(tags));        
+    return userData.addFields(await tagFields(tags));
 }
 
 const handler = async (interaction: ContextMenuInteraction, database: FirebaseFirestore.Firestore) => {

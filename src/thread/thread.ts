@@ -79,10 +79,13 @@ class Dialogue {
     state: State
     handlers: Map<CustomId, ComponentHandler>;
     collector?: InteractionCollector<MessageComponentInteraction>
+    db?: FirebaseFirestore.Firestore
 
-    constructor(interaction: CommandInteraction) {
+    constructor(interaction: CommandInteraction, db?: FirebaseFirestore.Firestore) {
         this.interaction = interaction;
         this.state = new State();
+
+        if (db) this.db = db;
 
         this.handlers = new Map();
 
@@ -317,9 +320,24 @@ class Dialogue {
             async (yesInteraction: MessageComponentInteraction) => {
                 if (!checkButton(yesInteraction)) return;
                 this.state.confirmed = true;
-                this.state.thread = await createThread(this.interaction);
-                // await yesInteraction.update()
-                // this.collector?.removeAllListeners();
+
+                const thread = await createThread(this.interaction);
+
+                if (thread === undefined) throw new Error("");  /* TODO: コマンド実行時エラー作成 */
+                if (this.db !== undefined) {
+                    await thread.members.add(this.interaction.user.id)
+
+                    this.state.thread = thread;
+                    const ref = this.db.doc(`threads/${thread.id}`);
+                    await ref.set({
+                        match_kind: this.state.matchKind ?? "未選択",
+                        rule_kinds: this.state.ruleKinds,
+                        start_time: this.state.startTime ?? null,
+                        participants: this.state.participantsNumber ?? 0,
+                        owner: this.db.doc(`members/${this.interaction.user.id}`),
+                        players: []
+                    });
+                }
                 await this.change(yesInteraction, this.joinUsMessage)
             }
         );
@@ -356,21 +374,41 @@ class Dialogue {
                 .setStyle(full ? "SUCCESS" : "PRIMARY"),
             async (yesInteraction: MessageComponentInteraction) => {
                 if (!checkButton(yesInteraction)) return;
-                const members = await this.state.thread?.members.fetch();
-                const alreadyJoined = members?.has(yesInteraction.user.id);
 
-                if (alreadyJoined !== undefined) {
-                    if (!alreadyJoined) {
-                        this.state.joinCount++;
-                        await this.state.thread?.members.add(yesInteraction.user)
-                    } else {
-                        // TODO: 参加者リストは Firestore 上で管理されるべきである.
-                        // スレッドのメンバーはこの用途には不適切。
-                    }
-                } else {
-                    this.state.joinCount++;
-                    await this.state.thread?.members.add(yesInteraction.user)
+                if (this.db === undefined) return;
+                if (this.state.thread === undefined) {
+                    await yesInteraction.reply({ content: "参加するスレッドを見つけられませんでした。", ephemeral: true });
+                    return;
                 }
+                const ref = this.db.doc(`threads/${this.state.thread.id}`);
+                const doc = await ref.get()
+                const data = doc.data();
+                
+                if (!doc.exists || data === undefined) {
+                    await yesInteraction.reply({ content: "募集の参加者リストへの追加に失敗しました。", ephemeral: true });
+                    return;
+                }
+
+                const isOwner = data.owner.id === yesInteraction.user.id;
+
+                if (isOwner) {
+                    await yesInteraction.reply({ content: "自身で作成した募集に参加することはできません。", ephemeral: true });
+                    return;
+                }
+
+                const alreadyJoined = data.players.some((d: FirebaseFirestore.DocumentReference) => d.id === yesInteraction.user.id);
+
+                if (alreadyJoined) {
+                    await yesInteraction.reply({ content: "既に募集に参加しています。", ephemeral: true });
+                    return;
+                }
+
+                await this.state.thread.members.add(yesInteraction.user)
+                await ref.set({
+                    players: [...data.players, this.db.doc(`members/${yesInteraction.user.id}`)]
+                }, { merge: true });
+
+                this.state.joinCount = data.players.length + 2;
                 await this.change(yesInteraction, this.joinUsMessage)
             }
         );
@@ -401,7 +439,10 @@ class Dialogue {
 }
 
 const roomCreateHandler = async (interaction: CommandInteraction) => {
-    const helper = new Dialogue(interaction);
+    const db = getDb();
+    if (db === null) return;
+
+    const helper = new Dialogue(interaction, db);
     await interaction.reply(helper.matchKindMessage as InteractionReplyOptions);
 }
 
@@ -412,7 +453,7 @@ const createThread = async (interaction: CommandInteraction) => {
         name: "募集チャンネル",
         autoArchiveDuration: 60
     });
-    await thread.members.add(interaction.user)
+
     return thread;
 }
 
@@ -421,6 +462,9 @@ const roomDeleteHandler = async (interaction: CommandInteraction) => {
 }
 
 const setup = (client: InterfaceWHLBot) => {
+
+
+
     client.addCommand(
         handler,
         new SlashCommandBuilder()
