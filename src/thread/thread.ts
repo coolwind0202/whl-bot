@@ -420,12 +420,17 @@ class Dialogue {
                 .setStyle("DANGER"),
             async (deadlineInteraction: MessageComponentInteraction) => {
                 if (!checkButton(deadlineInteraction)) return;
+
                 await deadlineInteraction.update({
                     content: "募集を締め切りました。",
                     embeds: [ this.embed ],
                     components: []
                 });
                 this.collector?.removeAllListeners();
+
+                if (this.db === undefined || this.state.thread === undefined) throw new Error("スレッド締切時のデータ削除に失敗しました。");
+                const ref = this.db.doc(`threads/${this.state.thread.id}`);
+                await ref.delete();
             }
         );
 
