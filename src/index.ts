@@ -1,43 +1,77 @@
-import { Client, Intents } from "discord.js";
+import { Client, ClientOptions, Intents, CommandInteraction } from "discord.js";
+import { SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandSubcommandsOnlyBuilder } from "@discordjs/builders";
+import { Routes } from "discord-api-types/v9";
+import { REST } from "@discordjs/rest";
 import dotenv from "dotenv";
-import fs from "fs";
+
+import ThreadSetup from "./thread/thread";
+import PingSetup from "./ping";
+import SyncSetup from "./firestore/firestore_sync";
+import ProfileFetchSetup from "./firestore/profile_fetch";
+import IntroductionSetup from "./firestore/introduction";
+import ProfileCommandJson from "./firestore/profile_command_json";
 
 dotenv.config();
 
+const token = process.env.DISCORD_TOKEN;
+const guildId = process.env.GUILD_ID;
+
+type CommandBuilder = SlashCommandBuilder | SlashCommandSubcommandBuilder | SlashCommandSubcommandsOnlyBuilder;
+
+interface InterfaceWHLBot extends Client {
+	commands: CommandBuilder[]
+	addCommand (func: { (interaction: CommandInteraction): void }, builder: CommandBuilder): void
+}
+
+class WHLBot extends Client implements InterfaceWHLBot {
+	commands: CommandBuilder[]
+	constructor(options: ClientOptions) {
+		super(options);
+		this.commands = [];
+
+		if (process.env.ENABLED_UPDATE_COMMAND === "true") this.updateGuildCommands();
+	}
+
+	updateGuildCommands() {
+		const rest = new REST({ version: "9" });
+		rest.setToken(token);
+		
+		this.on("ready", async () => {
+			const json: any[] = this.commands.map(command => command.toJSON());
+			const clientId = this.user?.id;
+			json.push(ProfileCommandJson);
+		});
+	}
+
+	addCommand (func: { (interaction: CommandInteraction): void }, builder: CommandBuilder) {
+		this.on("interactionCreate", async interaction => {
+			if (!interaction.isCommand()) return;
+	
+			if (interaction.commandName === builder.name) {
+				func(interaction);
+			}
+		});
+		this.commands.push(builder);
+	}
+}
 // Create a new client instance
-const client = new Client({ intents: [Intents.FLAGS.GUILDS] });
+const client = new WHLBot({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MEMBERS, Intents.FLAGS.GUILD_PRESENCES, Intents.FLAGS.GUILD_MESSAGES] });
 
 // When the client is ready, run this code (only once)
 client.once('ready', () => {
 	console.log('Ready!');
 });
-console.log(process.env.DISCORD_TOKEN);
 
-const getToken = async () => {
-	const envToken = process.env.DISCORD_TOKEN;
-	try {
-		const file = await fs.promises.readFile("/run/secrets/discord_token", "utf-8");
-		
-		if (file) {
-			return file;
-		} else if (envToken) {
-			return envToken;
-		} else return null;
-
-	} catch (e) {
-		console.log(e);
-		return envToken || null;
-	}
-}
+ThreadSetup(client);
+PingSetup(client);
+SyncSetup(client);
+IntroductionSetup(client);
+ProfileFetchSetup(client);
 
 // Login to Discord with your client's token
+client.login(process.env.DISCORD_TOKEN);
 
-const token = getToken();
-token
-.then(value => {
-	if (value) client.login(value)
-	else console.error("Bot のトークンが見つかりませんでした。\n" +
-		"トークンの設定方法は、 https://github.com/white-lucida/discord_bot/blob/main/README.md を参照してください。"
-	);
-})
-.catch(() => console.error());
+export {
+	InterfaceWHLBot,
+	CommandBuilder
+}

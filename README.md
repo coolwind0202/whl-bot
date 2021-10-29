@@ -4,19 +4,15 @@ White-Lucida 専用で稼働させる Bot のリポジトリです。
 
 このリポジトリを clone すれば、 Docker コンテナで稼働することができます。
 
-このプロジェクトの開発にあたって、Docker、 Docker-compose をインストールしてください。
+このプロジェクトの開発にあたって、Docker をインストールしてください。
 
 
 ## 稼働方法
 
-本番環境へのデプロイを素早く行うために、
-本番環境稼働ではGithub Packages を使い `docker pull` コマンドで即時に展開できるようにしています。
-
-開発環境の場合、この Git リポジトリを clone して、`docker-compose up` コマンドで起動できます。
-ただし、 Git リポジトリに bot のトークンは含まれていないので、別途トークンを設定する必要があります。
-
-
 ### 本番環境稼働の場合
+
+本番環境用の bot で稼働する場合、このコマンドを実行します
+（ただしこのコマンドは、普段は使用しません。）
 
 ```
 docker pull ghcr.io/white-lucida/discord_bot:latest
@@ -24,44 +20,89 @@ docker pull ghcr.io/white-lucida/discord_bot:latest
 
 ### 開発環境の場合
 
+開発環境で稼働する場合、 bot や Discord サーバーをテスト用のものに差し替える必要があります。
+
+このプロジェクトではデータの差し替えを簡単に行えるように、環境変数を利用しています。
+dotenv というnpmパッケージが利用されているので、 `.env` というファイルを README.md と同じ階層に置くことで、実行時だけ利用できる環境変数が設定できます。
+
 1. Git リポジトリを clone します。
-2. トークンを設定します（後述）。
-3. `$ docker-compose up`
+2. 環境変数を設定します（後述）。
+3. `$ docker run`
 
-#### トークンについて
-
-Bot を稼働するには、Discord Bot のトークンを設定する必要があります。
-トークンを取得する権限のない方は、ビルドすることができません。
-
-GitHub Packages に登録されている Docker イメージは、トークンのデータが既に含まれているので、トークンを知らなくても稼働できます。
-
-以下は、開発用に、本番環境のbotとは異なるトークンを利用する場合の方法です。
+### トークンの設定方法
 
 #### .env ファイルを記述する（おすすめ）
-このリポジトリの、 README.md と同じ階層に `.env` ファイルを作成します。内容は以下の通りです。
+このリポジトリの、 README.md と同じ階層に `.env` ファイルを作成します。雛形は以下の通りです。
 
 ```
-TOKEN = Discord bot のトークン
+DISCORD_TOKEN = ""
+GUILD_ID = ""
+ENABLED_UPDATE_COMMAND = ""
+FIRESTORE_EMULATOR_HOST = ""
+FIREBASE_PROJECT_ID = ""
+FIREBASE_CLIENT_EMAIL = ""
+FIREBASE_PRIVATE_KEY = ""
+BOT_OPT_OUT_ROLE_ID = ""
 ```
+
+`.env` ファイルの書式についてはここでは説明しません。
+
+各環境変数の意味や期待する値について説明します。
+
+
+##### DISCORD_TOKEN
+**必須です。**
+
+Discord bot のトークンです。ここを差し替えることであなたが管理する bot でソースコードを実行し、動作確認できます。
+Discord bot のトークンの取得方法は、 https://qiita.com/1ntegrale9/items/cb285053f2fa5d0cccdf などを参照してください。
+
+##### GUILD_ID
+**必須です。**
+
+White-Lucida の bot は、 White-Lucida の中だけで動作することが期待されています。
+しかし、White-Lucida 以外の環境で動作させたい場合もあると思います。
+そのような場合に、任意の Discord サーバーのIDをこの環境変数に設定すれば、そのサーバーを対象に bot が稼働します。
+
+##### ENABLED_UPDATE_COMMAND
+必須ではありません。
+
+この bot には、bot の起動時にスラッシュコマンドのリストを自動設定する機能があります。
+でも毎回スラッシュコマンドのリストを更新していると、 Discord API のレートリミットに引っかかるので、この環境変数の値が `true` のときだけコマンドリストを更新するように実装されています。
+
+##### FIRESTORE_EMULATOR_HOST
+必須ではありません。
+
+Firebase Emulator を使用する場合だけ、この環境変数を設定します。
+基本的に `localhost:8080` と記載していれば問題ないと思います。
+
+##### FIREBASE_PROJECT_ID
+必須ではありません。
+
+あなたが使用する Firebase のプロジェクトIDを設定してください。
+プロジェクトID は Firebase のコンソールのプロジェクト設定画面や、秘密鍵ファイルから参照できます。
+省略した場合は、 Firestore の同期機能は実行されません。
+
+##### FIREBASE_CLIENT_EMAIL
+必須ではありません。
+
+あなたが使用する Firebase の client email を設定してください。秘密鍵ファイルから参照できます。
+省略した場合は、 Firestore の同期機能は実行されません。
+
+##### FIREBASE_PRIVATE_KEY
+必須ではありません。
+
+あなたが使用する Firestore の private key を設定してください。秘密鍵ファイルから参照できます。
+省略した場合は、 Firestore の同期機能は実行されません。
+
+##### BOT_OPT_OUT_ROLE_ID
+必須ではありません。
+
+この環境変数は、 Bot の機能を使用しない選択をしたメンバーに付与されるロールのIDです。
+この環境変数の値とロールのIDが一致するようなロールを持ったメンバーは、Firestore の同期機能の対象から外れます。
 
 #### 環境変数を設定する
 
 お使いのマシンの `TOKEN` 環境変数に、Discord bot のトークンを登録します。方法は省略します。
-
-#### discord_token.txt ファイルを記述する（ビルド用）
-
-`discord_token.txt` という名前のファイルを README.md と同じ階層に作成します。内容は以下の通りです。
-
-```
-Discord bot のトークン
-```
-
-ビルド・本番環境での稼働を行うにあたって、トークンが Git リポジトリにも本番環境の環境変数にも現れないように構成したいと考えました。
-そこで、docker-compose の secrets 機能を使い、 `discord_token.txt` ファイルの内容は `/run/secret/discord_token` ファイルから読み出されるように構成しました。
-
-[src/index.js](https://github.com/white-lucida/discord_bot/blob/main/src/index.ts) において、 `/run/secret/discord_token` ファイルの内容を Discord bot のトークンとして利用するようにハードコーディングされています。
-
-この方法は、環境変数を使う他の方法と比べて特別です。 `discord_token.txt` を記述するのは、ビルド時だけにしてください。 `discord_token.txt` に変更を加えるのは、本番環境用の bot のトークンが変わったときだけにしてください。
 
 ### 仕様について
 
