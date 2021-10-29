@@ -24,7 +24,7 @@ jobs:
           # content of ssh private key. ex raw content of ~/.ssh/id_rsa
           key: ${{ secrets.VPS_SSH_KEY }} # optional
           # ssh remote password
-          pass: ${{ secrets.VPS_SSH_PASS }}
+          # pass: ${{ secrets.VPS_SSH_PASS }}
           # execute commands on ssh
           script: |
             cd /home/actions/src
