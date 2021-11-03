@@ -30,3 +30,4 @@ jobs:
             sudo nohup node dist/index.js &
             jobs
             disown %1
+            exit 0
