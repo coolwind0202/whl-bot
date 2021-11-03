@@ -2,6 +2,7 @@ import { memberNicknameMention, SlashCommandBuilder, SlashCommandSubcommandBuild
 import { Client, CommandInteraction, MessageActionRow, TextChannel, MessageSelectMenu, MessageEmbed, User, MessageComponentInteraction, MessageButton,
     InteractionUpdateOptions, MessageComponent, Message, Emoji, InteractionReplyOptions, ThreadChannel, InteractionCollector } from "discord.js";
 import { InterfaceWHLBot } from "..";
+import { normalize } from "../utils/envs";
 import { getDb } from "../firestore/firestore_config";
 import { checkSelectMenu, checkButton } from "../utils/component";
 import { EnvVarInvalidError } from "../utils/error";
@@ -14,7 +15,7 @@ const handler = async (interaction: CommandInteraction) => {
 
 const getThreadPortal = async (client: Client) => {
     const variableName = "THREAD_PORTAL_CHANNEL_ID"
-    const channelId = process.env[variableName];
+    const channelId = normalize(process.env[variableName]);
     if (channelId === undefined) {
         throw new EnvVarInvalidError(variableName, "募集用スレッドの親チャンネルの ID が指定されていません。")
     }

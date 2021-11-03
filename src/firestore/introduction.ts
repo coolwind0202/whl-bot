@@ -1,5 +1,6 @@
 import { CommandInteraction, MessageEmbed } from "discord.js";
 import { SlashCommandBuilder } from "@discordjs/builders";
+import { normalize } from "../utils/envs";
 import { InterfaceWHLBot } from "..";
 import { getDb } from "./firestore_config";
 
@@ -38,11 +39,11 @@ const setup = (client: InterfaceWHLBot) => {
                 );
             })
         }
-        if (message.channelId === process.env.INTRODUCTION_CHANNEL_ID) {
+        if (message.channelId === normalize(process.env.INTRODUCTION_CHANNEL_ID)) {
             update({
                 introduction: message.content.slice(0, 100)
             }, "自己紹介");
-        } else if (message.channelId === process.env.FRIEND_CODE_CHANNEL_ID) {
+        } else if (message.channelId === normalize(process.env.FRIEND_CODE_CHANNEL_ID)) {
             update({
                 friend_code: message.content.slice(0, 14)  // TODO: 14桁でない可能性もある。正規表現で抜き出す
             }, "フレンドコード");

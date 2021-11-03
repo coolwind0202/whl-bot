@@ -1,6 +1,7 @@
 import { PartialUser, User, PermissionFlags, Permissions, GuildMember } from "discord.js";
 import { InterfaceWHLBot } from "..";
 import { getDb, checkCanUseFirestore } from "./firestore_config";
+import { normalize } from "../utils/envs";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -36,14 +37,15 @@ const setup = (client: InterfaceWHLBot) => {
     client.once("ready", async () => {
         const batch = db.batch();
 
-        const guildId = process.env.GUILD_ID;
+        const guildId = normalize(process.env.GUILD_ID);
         if (!guildId) return;
 
         const guild = client.guilds.cache.get(guildId);
         if (!guild) return;
 
         guild.members.cache.each(member => {
-            if (process.env.BOT_OPT_OUT_ROLE_ID && member.roles.cache.get(process.env.BOT_OPT_OUT_ROLE_ID)) {
+            const roleId = normalize(process.env.BOT_OPT_OUT_ROLE_ID);
+            if (roleId && member.roles.cache.get(roleId)) {
                 return;
             }
             if (member.user.bot) return;
