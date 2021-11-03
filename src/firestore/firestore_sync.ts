@@ -39,11 +39,9 @@ const setup = (client: InterfaceWHLBot) => {
         const batch = db.batch();
 
         const guildId = normalize(process.env.GUILD_ID);
-        log(guildId ?? "サーバーIDなし")
         if (!guildId) return;
 
         const guild = client.guilds.cache.get(guildId);
-        log(guild?.toString() ?? "サーバーなし")
         if (!guild) return;
 
         guild.members.cache.each(member => {

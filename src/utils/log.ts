@@ -1,10 +1,11 @@
+import { MessageEmbed } from "discord.js";
 import axios from "axios";
 
-const log = (content: string) => {
+const log = (embed: MessageEmbed) => {
     if (!process.env.LOG_WEBHOOK) return;
     axios.post(process.env.LOG_WEBHOOK, {
-        "content": `＜ログ＞\n${content}`
-    })
+        "embed": embed.toJSON()
+    });
 }
 
 export { log }
