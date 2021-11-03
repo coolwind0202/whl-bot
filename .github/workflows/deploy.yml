@@ -27,7 +27,7 @@ jobs:
             sudo npm install
             curl -H "Content-Type: application/json" -X POST -d '{"content": "リリースされました！ https://github.com/white-lucida/discord_bot/releases/latest"}'  "https://discord.com/api/webhooks/902884706331287663/emAQaVD-wNctx10sB0HOwhCzEqq8ZIs4coG65r6gdxNWDmFfkzvjtiy3cy-xIcn_aP9g"
             sudo npx tsc
-            sudo nohup (
-              node dist/index.js
+            (
+              sudo nohup node dist/index.js
               disown %1
             ) &
