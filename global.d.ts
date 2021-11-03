@@ -11,5 +11,6 @@ declare namespace NodeJS {
         readonly THREAD_PORTAL_CHANNEL_ID?: string
         readonly INTRODUCTION_CHANNEL_ID?: string
         readonly FRIEND_CODE_CHANNEL_ID?: string
+        readonly LOG_WEBHOOK?: string
     }
 }
