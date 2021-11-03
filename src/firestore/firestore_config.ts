@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { normalize } from '../utils/envs';
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -12,9 +13,9 @@ const canUseFirestore = checkCanUseFirestore();
 if (admin.apps.length === 0 && canUseFirestore) {
     admin.initializeApp({
         credential: admin.credential.cert({
-            projectId: process.env.FIREBASE_PROJECT_ID?.replace(/\\n/g, "\n"),
-            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL?.replace(/\\n/g, "\n")
+            projectId: normalize(process.env.FIREBASE_PROJECT_ID),
+            privateKey: normalize(process.env.FIREBASE_PRIVATE_KEY),
+            clientEmail: normalize(process.env.FIREBASE_CLIENT_EMAIL)
         })
     });
 }
