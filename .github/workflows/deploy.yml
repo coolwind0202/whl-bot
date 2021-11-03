@@ -26,6 +26,7 @@ jobs:
             export DISCORD_TOKEN="${{ secrets.DISCORD_TOKEN }}" FIREBASE_CLIENT_EMAIL="${{ secrets.FIREBASE_CLIENT_EMAIL }}" FIREBASE_PRIVATE_KEY="${{ secrets.FIREBASE_PRIVATE_KEY }}" FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" FRIEND_CODE_CHANNEL_ID="${{ secrets.FRIEND_CODE_CHANNEL_ID }}" GUILD_ID="${{ secrets.GUILD_ID }}" INTRODUCTION_CHANNEL_ID="${{ secrets.INTRODUCTION_CHANNEL_ID }}" THREAD_PORTAL_CHANNEL_ID="${{ secrets.THREAD_PORTAL_CHANNEL_ID }}" BOT_OPT_OUT_ROLE_ID="${{ secrets.BOT_OPT_OUT_ROLE_ID }}"
             sudo npm install
             curl -H "Content-Type: application/json" -X POST -d '{"content": "リリースされました！ https://github.com/white-lucida/discord_bot/releases/latest"}'  "https://discord.com/api/webhooks/902884706331287663/emAQaVD-wNctx10sB0HOwhCzEqq8ZIs4coG65r6gdxNWDmFfkzvjtiy3cy-xIcn_aP9g"
-            sudo nohup npm run start &
+            sudo npx tsc
+            sudo nohup node dist/index.js &
             jobs
             disown %1
