@@ -53,8 +53,7 @@ const setup = (client: InterfaceWHLBot) => {
             if (member.user.bot) return;
             const ref = db.doc(`members/${member.id}`).withConverter(MemberConverter);
             batch.set(ref, {
-                ...createDbMemberField(member),
-                friend_code: ""
+                ...createDbMemberField(member)
             }, { merge: true });
         });
 
