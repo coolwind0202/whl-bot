@@ -4,6 +4,7 @@ import { getDb, checkCanUseFirestore } from "./firestore_config";
 import { normalize } from "../utils/envs";
 import { log } from "../utils/log";
 import dotenv from "dotenv";
+import { MemberConverter, MemberModel } from "../models/member";
 
 dotenv.config();
 
@@ -27,10 +28,10 @@ const setup = (client: InterfaceWHLBot) => {
     const createDbUserField = (user: User) => ({
         username: user.username,
         discriminator: user.discriminator,
-        avatar_url: user.displayAvatarURL()
+        avatar_url: user.displayAvatarURL({ format: "png" })
     });
 
-    const createDbMemberField = (member: GuildMember) => ({
+    const createDbMemberField = (member: GuildMember): MemberModel => ({
         ...createDbUserField(member.user),
         admin: member.permissions.has(Permissions.FLAGS.ADMINISTRATOR)
     });
@@ -50,12 +51,11 @@ const setup = (client: InterfaceWHLBot) => {
                 return;
             }
             if (member.user.bot) return;
-            const ref = db.doc(`members/${member.id}`);
+            const ref = db.doc(`members/${member.id}`).withConverter(MemberConverter);
             batch.set(ref, {
                 ...createDbMemberField(member),
-                friend_code: "",
-                introduction: "",
-            }, { mergeFields: ["username", "discriminator", "avatar_url", "admin"] });
+                friend_code: ""
+            }, { merge: true });
         });
 
         await batch.commit();
@@ -63,17 +63,15 @@ const setup = (client: InterfaceWHLBot) => {
 
     client.on("userUpdate", async (oldUser, newUser) => {
         if (isProfileUpdated(oldUser, newUser)) {
-            const doc = db.doc(`members/${oldUser.id}`);
+            const doc = db.doc(`members/${oldUser.id}`).withConverter(MemberConverter);
             await doc.set(createDbUserField(newUser), { merge: true });
         }
     });
 
     client.on("guildMemberAdd", async (member) => {
-        const doc = db.doc(`members/${member.id}`);
+        const doc = db.doc(`members/${member.id}`).withConverter(MemberConverter);
         await doc.set({ 
-            ...createDbMemberField(member), 
-            friend_codes: "",
-            introduction: ""
+            ...createDbMemberField(member)
         }, { merge: true });
     });
 

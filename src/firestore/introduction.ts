@@ -3,6 +3,7 @@ import { SlashCommandBuilder } from "@discordjs/builders";
 import { normalize } from "../utils/envs";
 import { InterfaceWHLBot } from "..";
 import { getDb } from "./firestore_config";
+import { MemberConverter, MemberModel } from "../models/member";
 
 const setup = (client: InterfaceWHLBot) => {
     const db = getDb();
@@ -23,8 +24,8 @@ const setup = (client: InterfaceWHLBot) => {
             }, 1000 * 10)
         }
 
-        const update = async (data: Object, label: string) => {
-            const ref = db.doc(`members/${message.author.id}`);
+        const update = async (data: Partial<MemberModel>, label: string) => {
+            const ref = db.doc(`members/${message.author.id}`).withConverter(MemberConverter);
             const snapShot = await ref.get();
             if (!snapShot.exists) return;
             
@@ -39,6 +40,7 @@ const setup = (client: InterfaceWHLBot) => {
                 );
             })
         }
+
         if (message.channelId === normalize(process.env.INTRODUCTION_CHANNEL_ID)) {
             update({
                 introduction: message.content.slice(0, 100)

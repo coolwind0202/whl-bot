@@ -2,20 +2,28 @@ import { CommandInteraction, ContextMenuInteraction, EmbedFieldData, Message, Me
 import { SlashCommandBuilder } from "@discordjs/builders";
 import { InterfaceWHLBot } from "..";
 import { getDb } from "./firestore_config";
+import { MemberConverter, MemberModel } from "../models/member";
+import { MemberTagConverter, MemberTagModel } from "../models/member_tag";
+import { TagKindConverter, TagKindModel } from "../models/tag_kind";
 
 const tagFields = async (tags: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>): Promise<EmbedFieldData[]> => {
     const fields: EmbedFieldData[] = [];
     for (const tag of tags.docs) {
         const parent = tag.data();
         const contentRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData> = parent.content;
-        const snapShot = await contentRef.get();
+        const snapShot = await contentRef.withConverter(MemberTagConverter).get();
         const data = snapShot.data();
         if (data) fields.push({ name: data.title, value: data.description, inline: true });
     }
     return fields;
 }
 
-const embed = async (data: FirebaseFirestore.DocumentData | undefined, tags: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>): Promise<MessageEmbed> => {
+const embed = async (data: MemberModel | undefined, tags: FirebaseFirestore.QuerySnapshot<any>): Promise<MessageEmbed> => {
+    /* 
+        TODO:
+        tags （tagsコレクションのルート）に対する型付けを行う
+        tags 内ドキュメントに対する型付けは既に行った
+    */
     if (data === undefined) {
         return new MessageEmbed()
             .setTitle("検索に失敗")
@@ -24,7 +32,7 @@ const embed = async (data: FirebaseFirestore.DocumentData | undefined, tags: Fir
 
     const userData = new MessageEmbed()
         .setTitle(`${data.username} のデータ`)
-        .setDescription(data.introduction)
+        .setDescription(data.introduction ?? "")
         .addField("フレンドコード", data.friend_code || "未設定")
         .setFooter("自己紹介とフレンドコードは Discord チャンネルから変更できます。")
         .setThumbnail(data.avatar_url)
@@ -34,12 +42,12 @@ const embed = async (data: FirebaseFirestore.DocumentData | undefined, tags: Fir
 }
 
 const handler = async (interaction: ContextMenuInteraction, database: FirebaseFirestore.Firestore) => {
-    const doc = database.doc(`members/${interaction.targetId}`)
+    const doc = database.doc(`members/${interaction.targetId}`).withConverter(MemberConverter)
     const ref = await doc.get();
     const data = ref.data();
 
     const tags = await doc.collection("tags").get();
-    const response = await embed(data,tags);
+    const response = await embed(data, tags);
     
     await interaction.reply({
         embeds: [
