@@ -8,9 +8,7 @@ import { checkSelectMenu, checkButton } from "../utils/component";
 import { EnvVarInvalidError } from "../utils/error";
 
 const handler = async (interaction: CommandInteraction) => {
-    const subCommand = interaction.options.getSubcommand();
-    if (subCommand === "new") roomCreateHandler(interaction);
-    else roomDeleteHandler(interaction);
+    roomCreateHandler(interaction);
 }
 
 const getThreadPortal = async (client: Client) => {
@@ -463,27 +461,12 @@ const createThread = async (interaction: CommandInteraction) => {
     return thread;
 }
 
-const roomDeleteHandler = async (interaction: CommandInteraction) => {
-    await interaction.reply("close");
-}
-
 const setup = (client: InterfaceWHLBot) => {
-
-
-
     client.addCommand(
         handler,
         new SlashCommandBuilder()
             .setName("room")
-            .setDescription("試合部屋を管理するコマンド")
-            .addSubcommand(new SlashCommandSubcommandBuilder()
-                .setName("new")
-                .setDescription("新しい部屋を作成します。")
-            )
-            .addSubcommand(new SlashCommandSubcommandBuilder()
-                .setName("close")
-                .setDescription("あなたの作った部屋をアーカイブします。")
-            )
+            .setDescription("試合募集を開始します。このコマンドを実行すると、必要事項の入力フォームが表示されます。")
     );
 }
 

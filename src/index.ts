@@ -40,6 +40,12 @@ class WHLBot extends Client implements InterfaceWHLBot {
 			const json: any[] = this.commands.map(command => command.toJSON());
 			const clientId = this.user?.id;
 			json.push(ProfileCommandJson);
+
+			if (this.user === null) return;
+			rest.put(
+				Routes.applicationGuildCommands(this.user.id, guildId),
+				{ body: json }
+			);
 		});
 	}
 
