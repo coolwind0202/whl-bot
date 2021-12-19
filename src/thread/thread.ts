@@ -104,8 +104,8 @@ class Dialogue {
         });
     }
 
-    async change(interaction: MessageComponentInteraction, options: InteractionUpdateOptions) {
-        await interaction.update(options);
+    async change(interaction: MessageComponentInteraction, options: (InteractionUpdateOptions | Promise<InteractionUpdateOptions>)) {
+        await interaction.update(await options);
     }
 
     setHandlerToComponent(component: ActionRowChild, handler: ComponentHandler): ActionRowChild {
@@ -160,6 +160,20 @@ class Dialogue {
         else return `${this.state.participantsNumber} 人`
     }
 
+    get memberIds(): Promise<null | string[]> {
+        if (this.db === undefined || this.state.thread === undefined) return new Promise<null>(resolve => resolve(null));
+        const ref = this.db.doc(`threads/${this.state.thread.id}`);
+        const doc = ref.get()
+        .then((doc) => {
+            const data = doc.data();
+            if (data === undefined) return null;
+            return data.players.map((d: FirebaseFirestore.DocumentReference) => d.id);
+        }).catch(() => null);
+        return doc;
+    }
+
+    
+
     get embed() {
         return new MessageEmbed()
             .setDescription(`${this.interaction.user} さんの募集 ${this.state.confirmed ? "": "（プレビュー）"}`)
@@ -169,6 +183,15 @@ class Dialogue {
             .addField("開始時刻", this.startTimeLabel)
             .setAuthor("White-Lucida", this.interaction.user.displayAvatarURL())
             .setColor("RANDOM")
+    }
+
+    async addMemberMentions(embed: MessageEmbed) {
+        const memberMentions = await this.memberIds.then(ids => {
+            if (ids === null) return null;
+            return ids.map(id => `<@${id}>`).join("\n");
+        });
+
+        return memberMentions ? embed.addField("参加者リスト", memberMentions) : embed;
     }
 
     get matchKindMessage(): InteractionUpdateOptions {
@@ -361,7 +384,7 @@ class Dialogue {
         }
     }
 
-    get joinUsMessage(): InteractionUpdateOptions {
+    get joinUsMessage(): Promise<InteractionUpdateOptions> {
         const participants = this.state.participantsNumber;
         const label = `${this.state.joinCount} 人参加` + (participants !== undefined ? ` / ${participants} 人募集` : "")
         const full = participants && participants <= this.state.joinCount;
@@ -419,10 +442,11 @@ class Dialogue {
                 .setStyle("DANGER"),
             async (deadlineInteraction: MessageComponentInteraction) => {
                 if (!checkButton(deadlineInteraction)) return;
+                const embed = await this.addMemberMentions(this.embed);
 
                 await deadlineInteraction.update({
                     content: "募集を締め切りました。",
-                    embeds: [ this.embed ],
+                    embeds: [ embed ],
                     components: []
                 });
                 this.collector?.removeAllListeners();
@@ -434,11 +458,14 @@ class Dialogue {
         );
 
         const row = new MessageActionRow().addComponents([ joinUs, deadline ]);
-        return {
-            content: `スレッドを作成しました。${this.state.thread} \n募集についての話し合いや試合中のチャットはここでどうぞ！`,
-            components: [ row ],
-            embeds: [ this.embed ]
-        }
+        return new Promise<InteractionUpdateOptions>(async resolve => {
+            const embed = await this.addMemberMentions(this.embed);
+            resolve({
+                content: `スレッドを作成しました。${this.state.thread} \n募集についての話し合いや試合中のチャットはここでどうぞ！`,
+                components: [ row ],
+                embeds: [ embed ]
+            });
+        })
     }
 }
 
