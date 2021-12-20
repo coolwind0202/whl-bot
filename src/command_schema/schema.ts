@@ -6,10 +6,5 @@ type CommandJsonType = {
     description: string
 }
 
-const json: CommandJsonType = {
-    name: "プロフィール",
-    type: ApplicationCommandType.User,
-    description: ""
-}
 
-export default json;
+export type { CommandJsonType }

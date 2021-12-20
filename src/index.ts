@@ -8,8 +8,10 @@ import ThreadSetup from "./thread/thread";
 import PingSetup from "./ping";
 import SyncSetup from "./firestore/firestore_sync";
 import ProfileFetchSetup from "./firestore/profile_fetch";
+import ReportSetup from "./report/report";
 import IntroductionSetup from "./firestore/introduction";
-import ProfileCommandJson from "./firestore/profile_command_json";
+import ProfileCommandJson from "./command_schema/profile_command_json";
+import ReportCommandJson from "./command_schema/report_command_json";
 
 dotenv.config();
 
@@ -38,8 +40,9 @@ class WHLBot extends Client implements InterfaceWHLBot {
 		
 		this.on("ready", async () => {
 			const json: any[] = this.commands.map(command => command.toJSON());
-			const clientId = this.user?.id;
+			
 			json.push(ProfileCommandJson);
+			json.push(ReportCommandJson);
 
 			if (this.user === null) return;
 			rest.put(
@@ -73,6 +76,7 @@ PingSetup(client);
 SyncSetup(client);
 IntroductionSetup(client);
 ProfileFetchSetup(client);
+ReportSetup(client);
 
 // Login to Discord with your client's token
 client.login(process.env.DISCORD_TOKEN);
